@@ -5,7 +5,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 const app = express(), server = http.createServer(app), io = new Server(server);
 const PORT = process.env.PORT || 3000;
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-store') }));
 
 const FALLBACK_PLAYERS = [{ name: 'Patrick Mahomes', teams: ['Kansas City Chiefs'], college: 'Texas Tech', position: 'QB', number: '15', firstSeason: '2017' }, { name: 'Travis Kelce', teams: ['Kansas City Chiefs'], college: 'Cincinnati', position: 'TE', number: '87', firstSeason: '2013' }];
 let GAME_PLAYERS = FALLBACK_PLAYERS;
