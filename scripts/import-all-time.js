@@ -35,6 +35,7 @@ const players = rows.map(parseLine).map((row) => Object.fromEntries(columns.map(
   name: row.full_name,
   teams: (row.teams || '').split('/').map((team) => TEAM_NAMES[team] || team).filter(Boolean),
   college: row.college || '',
+  position: row.position || '',
   number: (row.jersey_numbers || '').split('/').filter(Boolean),
   firstSeason: row.first_season || '',
   lastSeason: row.last_season || ''

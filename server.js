@@ -3,103 +3,40 @@ const http = require('http');
 const fs = require('fs');
 const express = require('express');
 const { Server } = require('socket.io');
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const app = express(), server = http.createServer(app), io = new Server(server);
 const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
-const FALLBACK_PLAYERS = [
-  { name: 'Patrick Mahomes', teams: ['Kansas City Chiefs'], number: '15' },
-  { name: 'Travis Kelce', teams: ['Kansas City Chiefs'], number: '87' },
-  { name: 'Jalen Hurts', teams: ['Philadelphia Eagles'], number: '1' },
-  { name: 'CeeDee Lamb', teams: ['Dallas Cowboys'], number: '88' }
-];
+const FALLBACK_PLAYERS = [{ name: 'Patrick Mahomes', teams: ['Kansas City Chiefs'], college: 'Texas Tech', position: 'QB', number: '15', firstSeason: '2017' }, { name: 'Travis Kelce', teams: ['Kansas City Chiefs'], college: 'Cincinnati', position: 'TE', number: '87', firstSeason: '2013' }];
 let GAME_PLAYERS = FALLBACK_PLAYERS;
-try {
-  const imported = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'nflverse-players.json'), 'utf8'));
-  if (Array.isArray(imported) && imported.length) GAME_PLAYERS = imported;
-} catch { /* Starter data keeps a first run playable. */ }
+try { const imported = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'nflverse-players.json'), 'utf8')); if (Array.isArray(imported) && imported.length) GAME_PLAYERS = imported; } catch { /* Starter data keeps a first run playable. */ }
+const key = (value) => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+const jerseyNumbers = (player) => (Array.isArray(player.number) ? player.number : [player.number]).filter(Boolean).map(String);
+const eraFor = (player) => { const year = Number(player.firstSeason); return Number.isFinite(year) ? `${Math.floor(year / 10) * 10}s` : ''; };
+const playerFor = (name) => GAME_PLAYERS.find((p) => key(p.name) === key(name));
 app.get('/api/players', (_req, res) => res.json(GAME_PLAYERS));
+app.get('/api/player-search', (req, res) => { const query = String(req.query.q || '').trim().toLowerCase(); if (query.length < 2) return res.json([]); res.json(GAME_PLAYERS.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8).map((p) => ({ name: p.name, position: p.position || '', teams: p.teams.slice(-1) }))); });
 
 const TEAM_COLORS = { 'Kansas City Chiefs':'#e31837', 'Philadelphia Eagles':'#004c54', 'Dallas Cowboys':'#89c5e3', 'San Francisco 49ers':'#aa0000', 'Baltimore Ravens':'#241773', 'Green Bay Packers':'#ffb612' };
 const rooms = new Map();
-const key = (value) => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
-const jerseyNumbers = (player) => Array.isArray(player.number) ? player.number.map(String) : [player.number].filter(Boolean).map(String);
 const roomCode = () => { let value; do value = Math.random().toString(36).slice(2, 6).toUpperCase(); while (rooms.has(value)); return value; };
-const playerFor = (name) => GAME_PLAYERS.find((p) => key(p.name) === key(name));
 const cleanName = (name) => String(name || 'Player').trim().slice(0, 16) || 'Player';
 const findRoom = (socketId) => [...rooms.values()].find((room) => room.players.some((p) => p.id === socketId));
-const publicState = (room) => ({ code: room.code, phase: room.phase, hostId: room.hostId, team: room.team, step: room.step, players: room.players.map(({ id, name, strikes, out }) => ({ id, name, strikes, out })), turnId: room.turnId, chain: room.chain, message: room.message, winner: room.winner });
+const publicState = (room) => ({ code: room.code, phase: room.phase, hostId: room.hostId, team: room.team, step: room.step, pending: room.pending, players: room.players.map(({ id, name, strikes, out }) => ({ id, name, strikes, out })), turnId: room.turnId, chain: room.chain, message: room.message, winner: room.winner });
 const broadcast = (room) => io.to(room.code).emit('state', publicState(room));
-
-function nextTurn(room) {
-  const alive = room.players.filter((p) => !p.out);
-  if (alive.length <= 1) { room.phase = 'finished'; room.winner = alive[0]?.name || null; return; }
-  const current = room.players.findIndex((p) => p.id === room.turnId);
-  for (let step = 1; step <= room.players.length; step++) {
-    const candidate = room.players[(current + step) % room.players.length];
-    if (!candidate.out) { room.turnId = candidate.id; return; }
-  }
-}
-function strike(room, player, reason) {
-  player.strikes += 1;
-  room.message = player.strikes >= 3 ? `${player.name} is out — three strikes.` : `${player.name}: strike ${player.strikes}/3. ${reason}`;
-  if (player.strikes >= 3) player.out = true;
-  nextTurn(room);
-}
-function randomTeam() {
-  const player = GAME_PLAYERS[Math.floor(Math.random() * GAME_PLAYERS.length)];
-  return player.teams[Math.floor(Math.random() * player.teams.length)];
-}
+function nextTurn(room) { const alive = room.players.filter((p) => !p.out); if (alive.length <= 1) { room.phase = 'finished'; room.winner = alive[0]?.name || null; return; } const current = room.players.findIndex((p) => p.id === room.turnId); for (let step = 1; step <= room.players.length; step++) { const candidate = room.players[(current + step) % room.players.length]; if (!candidate.out) { room.turnId = candidate.id; return; } } }
+function strike(room, player, reason) { player.strikes += 1; room.message = player.strikes >= 3 ? `${player.name} is out — three strikes.` : `${player.name}: strike ${player.strikes}/3. ${reason}`; if (player.strikes >= 3) player.out = true; nextTurn(room); }
+function randomTeam() { const player = GAME_PLAYERS[Math.floor(Math.random() * GAME_PLAYERS.length)]; return player.teams[Math.floor(Math.random() * player.teams.length)]; }
+function attribute(player, type) { if (type === 'TEAM') return player.teams; if (type === 'NUMBER') return jerseyNumbers(player); if (type === 'COLLEGE') return player.college ? [player.college] : []; if (type === 'POSITION') return player.position ? [player.position] : []; if (type === 'ERA') return eraFor(player) ? [eraFor(player)] : []; return []; }
+function matchesAttribute(player, pending) { return attribute(player, pending.type).some((value) => key(value) === key(pending.value)); }
+function labelFor(type, value) { return type === 'TEAM' ? `Team: ${value}` : type === 'NUMBER' ? `#${value}` : type === 'COLLEGE' ? `College: ${value}` : type === 'POSITION' ? `Position: ${value}` : `Era: ${value}`; }
 
 io.on('connection', (socket) => {
-  socket.on('create-room', ({ name }) => {
-    const room = { code: roomCode(), phase: 'lobby', hostId: socket.id, players: [{ id: socket.id, name: cleanName(name), strikes: 0, out: false }], team: null, step: 'team-player', chain: [], used: new Set(), turnId: null, message: 'Share the room code, then start when everyone has joined.', winner: null };
-    rooms.set(room.code, room); socket.join(room.code); socket.emit('joined', { id: socket.id }); broadcast(room);
-  });
-  socket.on('join-room', ({ code, name }) => {
-    const room = rooms.get(String(code).toUpperCase());
-    if (!room || room.phase !== 'lobby') return socket.emit('error-message', 'That room does not exist or the game has already started.');
-    if (room.players.length >= 6) return socket.emit('error-message', 'This room is full (six players).');
-    const player = { id: socket.id, name: cleanName(name), strikes: 0, out: false };
-    room.players.push(player); socket.join(room.code); socket.emit('joined', { id: socket.id }); room.message = `${player.name} joined the huddle.`; broadcast(room);
-  });
-  socket.on('start-game', () => {
-    const room = findRoom(socket.id); if (!room || room.hostId !== socket.id) return;
-    if (room.players.length < 2) return socket.emit('error-message', 'Invite at least one more player first.');
-    const team = randomTeam();
-    room.team = { name: team, color: TEAM_COLORS[team] || '#d4af37' }; room.phase = 'playing'; room.step = 'team-player'; room.chain = []; room.used = new Set(); room.turnId = room.players[0].id; room.message = `AI picked the ${team}. ${room.players[0].name}, name a player who played for that team.`; broadcast(room);
-  });
-  socket.on('submit-team-player', ({ name }) => {
-    const room = findRoom(socket.id); if (!room || room.phase !== 'playing' || room.turnId !== socket.id || room.step !== 'team-player') return;
-    const mover = room.players.find((p) => p.id === socket.id); const candidate = playerFor(name);
-    if (!candidate || !candidate.teams.includes(room.team.name)) { strike(room, mover, `${name || 'That player'} did not play for the ${room.team.name}.`); return broadcast(room); }
-    if (room.used.has(key(candidate.name))) { strike(room, mover, `${candidate.name} is already in the chain.`); return broadcast(room); }
-    room.chain.push({ name: candidate.name, by: mover.name, team: room.team.name, connector: `Team: ${room.team.name}` }); room.used.add(key(candidate.name)); room.step = 'connection'; nextTurn(room);
-    if (room.phase === 'playing') room.message = `Correct: ${candidate.name}. ${room.players.find((p) => p.id === room.turnId).name}, connect a player by team, jersey number, or college.`;
-    broadcast(room);
-  });
-  socket.on('submit-connection', ({ name, type }) => {
-    const room = findRoom(socket.id); if (!room || room.phase !== 'playing' || room.turnId !== socket.id || room.step !== 'connection') return;
-    const mover = room.players.find((p) => p.id === socket.id); const candidate = playerFor(name); const anchor = playerFor(room.chain.at(-1)?.name);
-    if (!candidate || !anchor) { strike(room, mover, 'That player is not in the NFL player data.'); return broadcast(room); }
-    if (room.used.has(key(candidate.name))) { strike(room, mover, `${candidate.name} is already in the chain.`); return broadcast(room); }
-    let shared;
-    if (type === 'TEAM') shared = candidate.teams.find((team) => anchor.teams.includes(team));
-    if (type === 'NUMBER') shared = jerseyNumbers(candidate).find((number) => jerseyNumbers(anchor).includes(number));
-    if (type === 'COLLEGE' && candidate.college && candidate.college === anchor.college) shared = candidate.college;
-    if (!shared) { strike(room, mover, `${candidate.name} has no shared ${String(type || '').toLowerCase()} connection with ${anchor.name}.`); return broadcast(room); }
-    const connector = type === 'TEAM' ? `Team: ${shared}` : type === 'NUMBER' ? `#${shared}` : `College: ${shared}`;
-    room.chain.push({ name: candidate.name, by: mover.name, team: candidate.teams.at(-1), connector }); room.used.add(key(candidate.name)); nextTurn(room);
-    if (room.phase === 'playing') room.message = `Connection holds: ${connector}. ${room.players.find((p) => p.id === room.turnId).name}, you're up.`;
-    broadcast(room);
-  });
-  socket.on('disconnect', () => {
-    const room = findRoom(socket.id); if (!room) return;
-    const player = room.players.find((p) => p.id === socket.id);
-    if (player && room.phase === 'playing') { player.out = true; room.message = `${player.name} disconnected and is out.`; nextTurn(room); broadcast(room); }
-  });
+  socket.on('create-room', ({ name }) => { const room = { code: roomCode(), phase: 'lobby', hostId: socket.id, players: [{ id: socket.id, name: cleanName(name), strikes: 0, out: false }], team: null, step: 'team-player', pending: null, chain: [], usedPlayers: new Set(), usedAttributes: new Set(), turnId: null, message: 'Share the room code, then start when everyone has joined.', winner: null }; rooms.set(room.code, room); socket.join(room.code); socket.emit('joined', { id: socket.id }); broadcast(room); });
+  socket.on('join-room', ({ code, name }) => { const room = rooms.get(String(code).toUpperCase()); if (!room || room.phase !== 'lobby') return socket.emit('error-message', 'That room does not exist or the game has already started.'); if (room.players.length >= 6) return socket.emit('error-message', 'This room is full (six players).'); const player = { id: socket.id, name: cleanName(name), strikes: 0, out: false }; room.players.push(player); socket.join(room.code); socket.emit('joined', { id: socket.id }); room.message = `${player.name} joined the huddle.`; broadcast(room); });
+  socket.on('start-game', () => { const room = findRoom(socket.id); if (!room || room.hostId !== socket.id) return; if (room.players.length < 2) return socket.emit('error-message', 'Invite at least one more player first.'); const team = randomTeam(); room.team = { name: team, color: TEAM_COLORS[team] || '#d4af37' }; room.phase = 'playing'; room.step = 'team-player'; room.pending = { type: 'TEAM', value: team, label: `Team: ${team}` }; room.chain = []; room.usedPlayers = new Set(); room.usedAttributes = new Set([`TEAM:${key(team)}`]); room.turnId = room.players[0].id; room.message = `AI picked the ${team}. ${room.players[0].name}, name a player who played for that team.`; broadcast(room); });
+  socket.on('submit-player', ({ name }) => { const room = findRoom(socket.id); if (!room || room.phase !== 'playing' || room.turnId !== socket.id || !['team-player', 'player'].includes(room.step)) return; const mover = room.players.find((p) => p.id === socket.id), candidate = playerFor(name); if (!candidate || !matchesAttribute(candidate, room.pending)) { strike(room, mover, `${name || 'That player'} does not match ${room.pending.label}.`); return broadcast(room); } if (room.usedPlayers.has(key(candidate.name))) { strike(room, mover, `${candidate.name} is already in the chain.`); return broadcast(room); } room.chain.push({ name: candidate.name, by: mover.name, team: candidate.teams.at(-1), connector: room.pending.label }); room.usedPlayers.add(key(candidate.name)); room.step = 'attribute'; room.pending = null; nextTurn(room); if (room.phase === 'playing') room.message = `Correct: ${candidate.name}. ${room.players.find((p) => p.id === room.turnId).name}, name one unused attribute for that player.`; broadcast(room); });
+  socket.on('submit-attribute', ({ type, value }) => { const room = findRoom(socket.id); if (!room || room.phase !== 'playing' || room.turnId !== socket.id || room.step !== 'attribute') return; const mover = room.players.find((p) => p.id === socket.id), anchor = playerFor(room.chain.at(-1)?.name), normalized = String(value || '').trim(); if (!anchor || !attribute(anchor, type).some((item) => key(item) === key(normalized))) { strike(room, mover, `${normalized || 'That'} is not a valid ${String(type || '').toLowerCase()} for ${anchor?.name || 'this player'}.`); return broadcast(room); } const uniqueKey = `${type}:${key(normalized)}`; if (room.usedAttributes.has(uniqueKey)) { strike(room, mover, `${labelFor(type, normalized)} was already used.`); return broadcast(room); } room.pending = { type, value: normalized, label: labelFor(type, normalized) }; room.usedAttributes.add(uniqueKey); room.step = 'player'; nextTurn(room); if (room.phase === 'playing') room.message = `${room.pending.label}. ${room.players.find((p) => p.id === room.turnId).name}, name a new connected player.`; broadcast(room); });
+  socket.on('disconnect', () => { const room = findRoom(socket.id); if (!room) return; const player = room.players.find((p) => p.id === socket.id); if (player && room.phase === 'playing') { player.out = true; room.message = `${player.name} disconnected and is out.`; nextTurn(room); broadcast(room); } });
 });
 server.listen(PORT, () => console.log(`NFL Connections running at http://localhost:${PORT}`));
