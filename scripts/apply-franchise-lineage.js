@@ -23,13 +23,13 @@ function franchise(code, season) {
   if (code === 'HOU') return year <= 1996 ? 'Houston Oilers' : 'Houston Texans';
   if (code === 'HST') return 'Houston Texans';
   if (code === 'OIL' || code === 'TEN') return 'Tennessee Titans';
-  if (code === 'BAL') return year <= 1983 ? 'Baltimore Colts' : 'Baltimore Ravens';
+  if (code === 'BAL' || code === 'BLT') return year <= 1983 ? 'Baltimore Colts' : 'Baltimore Ravens';
   if (code === 'IND') return 'Indianapolis Colts';
   if (code === 'STL') return year <= 1987 ? 'St. Louis Cardinals' : 'Los Angeles Rams';
-  if (code === 'LA' || code === 'RAM') return 'Los Angeles Rams';
+  if (code === 'LA' || code === 'RAM' || code === 'SL') return 'Los Angeles Rams';
   if (code === 'SD' || code === 'LAC') return 'Los Angeles Chargers';
-  if (code === 'OAK' || code === 'LV') return 'Las Vegas Raiders';
-  if (code === 'PHO' || code === 'ARZ') return 'Arizona Cardinals';
+  if (code === 'OAK' || code === 'RAI' || code === 'LV') return 'Las Vegas Raiders';
+  if (code === 'PHO' || code === 'ARI' || code === 'ARZ') return 'Arizona Cardinals';
   if (code === 'CLV' || code === 'CLE') return 'Cleveland Browns';
   if (code === 'WAS' || code === 'WSH') return 'Washington Commanders';
   const names = { ATL:'Atlanta Falcons', BUF:'Buffalo Bills', CAR:'Carolina Panthers', CHI:'Chicago Bears', CIN:'Cincinnati Bengals', DAL:'Dallas Cowboys', DEN:'Denver Broncos', DET:'Detroit Lions', GB:'Green Bay Packers', JAX:'Jacksonville Jaguars', KC:'Kansas City Chiefs', MIA:'Miami Dolphins', MIN:'Minnesota Vikings', NE:'New England Patriots', NO:'New Orleans Saints', NYG:'New York Giants', NYJ:'New York Jets', PHI:'Philadelphia Eagles', PIT:'Pittsburgh Steelers', SF:'San Francisco 49ers', SEA:'Seattle Seahawks', TB:'Tampa Bay Buccaneers' };
