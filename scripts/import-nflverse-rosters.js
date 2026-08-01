@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const season = process.argv[2] || new Date().getFullYear();
+const ZERO_LEGAL_FROM_SEASON = 2023;
 const url = `https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_${season}.csv`;
 
 function parseLine(line) {
@@ -30,7 +31,7 @@ async function main() {
     teams: [row.team],
     college: (row.college || '').split(';').map((college) => college.trim()).filter(Boolean),
     number: String(row.jersey_number || '').replace(/\.0$/, '')
-  })).filter((player) => player.name && player.teams[0] && player.college.length && player.number && !seen.has(player.name.toLowerCase()) && seen.add(player.name.toLowerCase()));
+  })).filter((player) => player.name && player.teams[0] && player.college.length && player.number && !(player.number === '0' && Number(season) < ZERO_LEGAL_FROM_SEASON) && !seen.has(player.name.toLowerCase()) && seen.add(player.name.toLowerCase()));
   const output = path.join(__dirname, '..', 'data', 'nflverse-players.json');
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(players));
