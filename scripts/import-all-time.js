@@ -34,7 +34,7 @@ const seen = new Set();
 const players = rows.map(parseLine).map((row) => Object.fromEntries(columns.map((column, i) => [column, row[i] || '']))).map((row) => ({
   name: row.full_name,
   teams: (row.teams || '').split('/').map((team) => TEAM_NAMES[team] || team).filter(Boolean),
-  college: row.college || '',
+  college: (row.college || '').split(';').map((college) => college.trim()).filter(Boolean),
   position: row.position || '',
   number: (row.jersey_numbers || '').split('/').filter(Boolean),
   firstSeason: row.first_season || '',

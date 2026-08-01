@@ -28,9 +28,9 @@ async function main() {
   const players = records.map((row) => ({
     name: row.full_name,
     teams: [row.team],
-    college: row.college,
+    college: (row.college || '').split(';').map((college) => college.trim()).filter(Boolean),
     number: String(row.jersey_number || '').replace(/\.0$/, '')
-  })).filter((player) => player.name && player.teams[0] && player.college && player.number && !seen.has(player.name.toLowerCase()) && seen.add(player.name.toLowerCase()));
+  })).filter((player) => player.name && player.teams[0] && player.college.length && player.number && !seen.has(player.name.toLowerCase()) && seen.add(player.name.toLowerCase()));
   const output = path.join(__dirname, '..', 'data', 'nflverse-players.json');
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(players));
