@@ -16,7 +16,7 @@ const eraFor = (player) => { const year = Number(player.firstSeason); return Num
 const playerFor = (name) => GAME_PLAYERS.find((p) => key(p.name) === key(name));
 app.get('/api/players', (_req, res) => res.json(GAME_PLAYERS));
 app.get('/api/player-search', (req, res) => { const query = String(req.query.q || '').trim().toLowerCase(); if (query.length < 2) return res.json([]); res.json(GAME_PLAYERS.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8).map((p) => ({ name: p.name, position: p.position || '', teams: p.teams.slice(-1) }))); });
-app.get('/api/player-options', (req, res) => { const type = String(req.query.type || ''), value = String(req.query.value || ''); if (!type || !value) return res.json([]); res.json(GAME_PLAYERS.filter((player) => matchesAttribute(player, { type, value })).slice(0, 8).map((player) => ({ name: player.name, position: player.position || '', teams: player.teams.slice(-1) }))); });
+app.get('/api/player-options', (req, res) => { const type = String(req.query.type || ''), value = String(req.query.value || ''), query = String(req.query.q || '').trim().toLowerCase(); if (!type || !value) return res.json([]); res.json(GAME_PLAYERS.filter((player) => matchesAttribute(player, { type, value }) && (!query || player.name.toLowerCase().includes(query))).slice(0, 5).map((player) => ({ name: player.name, position: player.position || '', firstSeason: player.firstSeason || '', lastSeason: player.lastSeason || '', teams: player.teams.slice(-1) }))); });
 
 const TEAM_COLORS = { 'Kansas City Chiefs':'#e31837', 'Philadelphia Eagles':'#004c54', 'Dallas Cowboys':'#89c5e3', 'San Francisco 49ers':'#aa0000', 'Baltimore Ravens':'#241773', 'Green Bay Packers':'#ffb612' };
 const rooms = new Map();
